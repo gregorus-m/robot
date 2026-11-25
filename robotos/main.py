@@ -27,7 +27,7 @@ import sound
 
 REPO_DIR = Path(__file__).resolve().parent.parent
 SPLASH_FILE = REPO_DIR / "splash.txt"
-SWISH_SOUND = "meow.wav"         # played when the tail swishes; any .wav or .mp3 in sounds/
+MEOW_SOUND = "meow.wav"          # the cat's meow; any .wav or .mp3 in sounds/
 # While the meow is playing, this part of the picture is swapped for the
 # open-mouth version. If you redraw the cat's face, update these to match.
 MOUTH_CLOSED = "> ^ <"
@@ -42,7 +42,8 @@ FRAME_SEPARATOR = "--- frame ---"
 TEXT_SEPARATOR = "=== text ==="
 
 FRAME_SECONDS = 0.15             # time each frame of the swish is shown
-SWISH_EVERY = (4.0, 12.0)        # random pause between swishes (seconds)
+SWISH_EVERY = (4.0, 12.0)        # random pause between tail swishes (seconds)
+MEOW_EVERY = (6.0, 20.0)         # random pause between meows (seconds), independent of the tail
 
 CLEAR_SCREEN = "\033[2J"
 CURSOR_HOME = "\033[H"
@@ -177,40 +178,38 @@ def main() -> None:
     screen.draw(0, clear=True)
     sound.start()        # open the audio stream early so the TV wakes up
 
-    # Placeholder main loop: swish the tail (and meow) now and then.
-    # Replace/extend with the robot's real control loop later.
-    while True:
-        time.sleep(random.uniform(*SWISH_EVERY))
-        swish_and_meow(screen, sequence)
+    # Placeholder main loop: the tail swishes and the cat meows, each on its
+    # own random schedule (they can overlap). Replace/extend with the robot's
+    # real control loop later.
+    now = time.monotonic()
+    next_swish = now + random.uniform(*SWISH_EVERY)
+    next_meow = now + random.uniform(*MEOW_EVERY)
+    tail_frames: list[int] = []     # swish frames still to show
+    tail_start = 0.0
+    mouth_from = mouth_until = 0.0  # when the mouth is open
+    shown = (0, False)
 
-
-def swish_and_meow(screen: Screen, sequence: list[int]) -> None:
-    """Swish the tail (sometimes twice) and meow, with the mouth open while
-    the meow is audible. The sound is started early to cover its lead-in, so
-    the tail, mouth and meow all begin together."""
-    length = 0.0
-    if sound.play(SWISH_SOUND):
-        delay, length = sound.timing(SWISH_SOUND)
-        time.sleep(delay)
-    start = time.monotonic()
-    mouth_from, mouth_until = start, start + length
-
-    tail_frames = sequence * random.choice([1, 1, 2])
-    shown = None
     while True:
         now = time.monotonic()
-        step = int((now - start) / FRAME_SECONDS)
-        if step >= len(tail_frames) and now >= mouth_until:
-            break
+
+        if now >= next_swish:
+            tail_frames = sequence * random.choice([1, 1, 2])   # sometimes twice
+            tail_start = now
+            next_swish = now + len(tail_frames) * FRAME_SECONDS + random.uniform(*SWISH_EVERY)
+
+        if now >= next_meow:
+            if sound.play(MEOW_SOUND):
+                delay, length = sound.timing(MEOW_SOUND)
+                mouth_from, mouth_until = now + delay, now + delay + length
+            next_meow = now + random.uniform(*MEOW_EVERY)
+
+        step = int((now - tail_start) / FRAME_SECONDS)
         frame = tail_frames[step] if step < len(tail_frames) else 0
         state = (frame, mouth_from <= now < mouth_until)
         if state != shown:          # only redraw when something changes
             screen.draw(*state)
             shown = state
         time.sleep(0.02)
-    if shown != (0, False):
-        screen.draw(0)
-
 
 if __name__ == "__main__":
     main()

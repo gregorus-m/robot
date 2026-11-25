@@ -6,7 +6,7 @@ fail=0
 check() { if "$@"; then echo "  ok"; else echo "  FAILED"; fail=1; fi; }
 
 echo "Python files compile:"
-check python3 -m py_compile robotos/boot.py robotos/main.py
+check python3 -m py_compile robotos/*.py tools/*.py
 
 echo "Shell scripts parse:"
 check bash -n install.sh run.sh
@@ -36,6 +36,16 @@ main.main()
 " >/dev/null
   [ $? -eq 124 ]   # 124 = still running when timeout stopped it (good)
 '
+
+echo "Sound module handles missing players/files without crashing:"
+check python3 -c "
+import sys; sys.path.insert(0, 'robotos')
+import sound
+from pathlib import Path
+assert (sound.SOUNDS_DIR / 'startup.wav').is_file(), 'sounds/startup.wav missing'
+sound.play('startup.wav'); sound.play('does-not-exist.wav')
+print('  players found:', {k: __import__('shutil').which(v[0]) for k, v in sound.PLAYERS.items()})
+"
 
 echo "Self-update is skipped in this dev copy:"
 check bash -c 'python3 -c "

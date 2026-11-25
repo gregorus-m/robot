@@ -23,8 +23,11 @@ import sys
 import time
 from pathlib import Path
 
+import sound
+
 REPO_DIR = Path(__file__).resolve().parent.parent
 SPLASH_FILE = REPO_DIR / "splash.txt"
+STARTUP_SOUND = "startup.wav"    # any .wav or .mp3 in sounds/
 
 FRAME_SEPARATOR = "--- frame ---"
 TEXT_SEPARATOR = "=== text ==="
@@ -141,6 +144,7 @@ def main() -> None:
 
     sys.stdout.write(HIDE_CURSOR)
     screen.draw(0, clear=True)
+    sound.play(STARTUP_SOUND)
 
     # Placeholder main loop: swish the tail now and then. Replace/extend
     # with the robot's real control loop later.

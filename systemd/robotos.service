@@ -1,0 +1,29 @@
+[Unit]
+Description=RobotOS
+# Start once networking is configured, but don't block boot waiting for it;
+# boot.py does its own short wait before trying to update.
+After=network-online.target
+Wants=network-online.target
+# RobotOS owns the HDMI console (tty1), so stop the login prompt there.
+# You can still log in over SSH.
+Conflicts=getty@tty1.service
+After=getty@tty1.service
+
+[Service]
+Type=simple
+WorkingDirectory=/opt/robotos
+ExecStart=/usr/bin/python3 -u /opt/robotos/robotos/boot.py
+Restart=on-failure
+RestartSec=5
+
+# Draw on the physical screen.
+StandardInput=tty
+StandardOutput=tty
+StandardError=journal
+TTYPath=/dev/tty1
+TTYReset=yes
+TTYVHangup=yes
+TTYVTDisallocate=yes
+
+[Install]
+WantedBy=multi-user.target

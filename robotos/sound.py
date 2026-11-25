@@ -10,7 +10,9 @@ Players used (standard Linux command-line tools):
 """
 
 import io
+import random
 import shutil
+import struct
 import subprocess
 import sys
 import threading
@@ -23,9 +25,12 @@ SOUNDS_DIR = Path(__file__).resolve().parent.parent / "sounds"
 # /etc/asound.conf). Or force one here, e.g. "plughw:1" for HDMI port 2.
 DEVICE: str | None = None
 
-# Silence added before each .wav sound. Many TVs mute the first fraction of
-# a second of HDMI audio every time a sound starts. 0 to turn off.
-LEAD_IN_SECONDS = 2.0
+# Inaudibly faint hiss played before each .wav sound. TVs take about a
+# second to switch their speakers on when HDMI audio starts, and pure digital
+# silence doesn't wake them -- so without this, short sounds are lost
+# entirely. 0 to turn off (e.g. once using the built-in speaker amp).
+LEAD_IN_SECONDS = 1.5
+LEAD_IN_LEVEL = 30      # hiss amplitude out of 32767 (about -60 dB: inaudible)
 
 PLAYERS = {
     ".wav": ("aplay", "-q", "-D"),
@@ -56,15 +61,20 @@ def command_for(path: Path) -> list[str] | None:
 
 
 def with_lead_in(path: Path) -> bytes | None:
-    """The .wav file's bytes with LEAD_IN_SECONDS of silence in front."""
+    """The .wav file's bytes with LEAD_IN_SECONDS of faint hiss in front."""
     try:
         with wave.open(str(path), "rb") as src:
             params = src.getparams()
             audio = src.readframes(params.nframes)
         bytes_per_frame = params.nchannels * params.sampwidth
-        # 8-bit WAV is unsigned, so its "silence" is 128 rather than 0.
-        quiet = b"\x80" if params.sampwidth == 1 else b"\x00"
-        silence = quiet * (int(params.framerate * LEAD_IN_SECONDS) * bytes_per_frame)
+        count = int(params.framerate * LEAD_IN_SECONDS) * params.nchannels
+        if params.sampwidth == 2:
+            silence = struct.pack(f"<{count}h", *(
+                random.randint(-LEAD_IN_LEVEL, LEAD_IN_LEVEL) for _ in range(count)))
+        else:
+            # Other bit depths: plain silence (8-bit WAV's silence is 128).
+            quiet = b"\x80" if params.sampwidth == 1 else b"\x00"
+            silence = quiet * (count * params.sampwidth)
         out = io.BytesIO()
         with wave.open(out, "wb") as dst:
             dst.setparams(params)

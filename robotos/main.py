@@ -184,14 +184,15 @@ def main() -> None:
 
 
 def swish_and_meow(screen: Screen, sequence: list[int]) -> None:
-    """Swish the tail (sometimes twice), with the mouth open while the meow
-    is actually audible."""
-    start = time.monotonic()
-    mouth_from = mouth_until = start
+    """Swish the tail (sometimes twice) and meow, with the mouth open while
+    the meow is audible. The sound is started early to cover its lead-in, so
+    the tail, mouth and meow all begin together."""
+    length = 0.0
     if sound.play(SWISH_SOUND):
         delay, length = sound.timing(SWISH_SOUND)
-        mouth_from = start + delay
-        mouth_until = mouth_from + length
+        time.sleep(delay)
+    start = time.monotonic()
+    mouth_from, mouth_until = start, start + length
 
     tail_frames = sequence * random.choice([1, 1, 2])
     shown = None

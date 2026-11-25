@@ -70,6 +70,8 @@ def play(name: str) -> bool:
                                     timeout=120)
             if result.returncode != 0:
                 log(f"{name} failed: {result.stderr.strip()[:200]}")
+            else:
+                log(f"played {name} ({' '.join(cmd[:-1])})")
         except Exception as exc:  # noqa: BLE001
             log(f"{name} failed: {exc}")
 

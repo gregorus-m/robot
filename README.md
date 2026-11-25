@@ -14,9 +14,8 @@ On boot, systemd runs `robotos/boot.py`, which:
 | Path | What it is |
 |---|---|
 | `splash.txt` | The splash screen: an animated cat. Frames are separated by `--- frame ---` (the first is the resting pose); text under the picture goes after `=== text ===`. `{version}` and `{update}` are filled in at runtime. |
-| `sounds/` | Sound files (`.wav` or `.mp3`). `startup.wav` plays at boot. |
+| `sounds/` | Sound files (`.wav` or `.mp3`). `meow.wav` plays when the cat swishes its tail. |
 | `robotos/sound.py` | Plays sounds in the background; never crashes RobotOS if sound isn't working. Set `DEVICE` here to force an output. |
-| `tools/make_meow.py` | Regenerates `sounds/startup.wav` (a synthesized meow). |
 | `robotos/boot.py` | Startup script: self-update, then launch main. |
 | `robotos/main.py` | RobotOS itself (splash + main loop placeholder). |
 | `systemd/robotos.service` | systemd unit that starts RobotOS at boot on tty1. |

@@ -27,7 +27,12 @@ import sound
 
 REPO_DIR = Path(__file__).resolve().parent.parent
 SPLASH_FILE = REPO_DIR / "splash.txt"
-STARTUP_SOUND = "startup.wav"    # any .wav or .mp3 in sounds/
+SWISH_SOUND = "meow.wav"         # played when the tail swishes; any .wav or .mp3 in sounds/
+
+# Big font for the HDMI console (the default is tiny on a TV). Other sizes
+# live in /usr/share/consolefonts, e.g. Lat15-TerminusBold28x14.psf.gz.
+# Only applied on a real console (tty1 etc.), never in SSH/PC terminals.
+CONSOLE_FONT = "/usr/share/consolefonts/Lat15-TerminusBold32x16.psf.gz"
 
 FRAME_SEPARATOR = "--- frame ---"
 TEXT_SEPARATOR = "=== text ==="
@@ -49,6 +54,24 @@ def version() -> str:
         ).stdout.strip() or "unknown"
     except Exception:  # noqa: BLE001
         return "unknown"
+
+
+def set_console_font() -> None:
+    try:
+        tty = os.ttyname(sys.stdout.fileno())
+    except OSError:
+        return
+    if not tty.startswith("/dev/tty") or not tty[8:].isdigit():
+        return  # not a Linux console (e.g. SSH or a PC terminal)
+    if shutil.which("setfont") is None or not os.path.exists(CONSOLE_FONT):
+        print(f"[robotos] can't set font: setfont or {CONSOLE_FONT} missing",
+              file=sys.stderr, flush=True)
+        return
+    try:
+        subprocess.run(["setfont", "-C", tty, CONSOLE_FONT],
+                       capture_output=True, timeout=10)
+    except Exception as exc:  # noqa: BLE001
+        print(f"[robotos] setfont failed: {exc}", file=sys.stderr, flush=True)
 
 
 def trim_blank(lines: list[str]) -> list[str]:
@@ -138,18 +161,19 @@ def main() -> None:
     signal.signal(signal.SIGTERM, shutdown)
     signal.signal(signal.SIGINT, shutdown)
 
+    set_console_font()   # before measuring the screen size
     frames, text = load_splash()
     screen = Screen(frames, text)
     sequence = swish_sequence(len(frames))
 
     sys.stdout.write(HIDE_CURSOR)
     screen.draw(0, clear=True)
-    sound.play(STARTUP_SOUND)
 
-    # Placeholder main loop: swish the tail now and then. Replace/extend
-    # with the robot's real control loop later.
+    # Placeholder main loop: swish the tail (and meow) now and then.
+    # Replace/extend with the robot's real control loop later.
     while True:
         time.sleep(random.uniform(*SWISH_EVERY))
+        sound.play(SWISH_SOUND)
         # Sometimes swish twice in a row.
         for _ in range(random.choice([1, 1, 2])):
             for index in sequence:

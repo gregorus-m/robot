@@ -28,7 +28,8 @@ GIT_TIMEOUT_SECONDS = 30    # max time for any single git command
 
 
 def log(msg: str) -> None:
-    print(f"[robotos-boot] {msg}", flush=True)
+    # stderr goes to the journal under systemd (journalctl -u robotos).
+    print(f"[robotos-boot] {msg}", file=sys.stderr, flush=True)
 
 
 def git(*args: str) -> str:

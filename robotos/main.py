@@ -33,6 +33,10 @@ MEOW_SOUND = "meow.wav"          # the cat's meow; any .wav or .mp3 in sounds/
 # open-mouth version. If you redraw the cat's face, update these to match.
 MOUTH_CLOSED = "> ^ <"
 MOUTH_OPEN = "> o <"
+# Ear twitch (Y button): the ears are swapped for one of these for a moment.
+EARS_UP = "/\\_/\\"
+EARS_DOWN = {"left": "<__/\\", "right": "/\\__>"}
+EAR_TWITCH_SECONDS = 1.0
 
 # Big font for the HDMI console (the default is tiny on a TV). Other sizes
 # live in /usr/share/consolefonts, e.g. Lat15-TerminusBold28x14.psf.gz.
@@ -158,14 +162,16 @@ class Screen:
 
     def draw(self, frame_index: int, mouth_open: bool = False,
              held: frozenset = frozenset(), pad_name: str = "",
-             clear: bool = False) -> None:
+             ear_down: str = "", clear: bool = False) -> None:
         """held: the PAD_TOKENS keys currently held. pad_name: the connected
-        controller's name, or "" if none."""
+        controller's name, or "" if none. ear_down: "left", "right" or ""."""
         cols, rows = shutil.get_terminal_size(fallback=(80, 24))
 
         frame = self.frames[frame_index]
         if mouth_open:
             frame = [line.replace(MOUTH_CLOSED, MOUTH_OPEN) for line in frame]
+        if ear_down:
+            frame = [line.replace(EARS_UP, EARS_DOWN[ear_down]) for line in frame]
         pic_left = max((cols - self.pic_width) // 2, 0)
         lines = [" " * pic_left + line.ljust(self.pic_width) for line in frame]
         if self.text:
@@ -232,7 +238,7 @@ def main() -> None:
 
     # Placeholder main loop: the tail swishes and the cat meows, each on its
     # own random schedule (they can overlap), or on demand from the
-    # controller: A = meow, B = swish. Replace/extend with the robot's real
+    # controller: A = meow, B = swish, Y = ear twitch. Replace/extend with the robot's real
     # control loop later.
     now = time.monotonic()
     next_swish = now + random.uniform(*SWISH_EVERY)
@@ -240,6 +246,7 @@ def main() -> None:
     tail_frames: list[int] = []     # swish frames still to show
     tail_start = 0.0
     mouth_from = mouth_until = 0.0  # when the mouth is open
+    ear_side, ear_until = "", 0.0   # which ear is down, and until when
     shown = None
 
     while True:
@@ -257,10 +264,15 @@ def main() -> None:
                 mouth_from, mouth_until = now + delay, now + delay + length
             next_meow = now + random.uniform(*MEOW_EVERY)
 
+        if controller.Y in pressed:
+            ear_side = random.choice(["left", "right"])
+            ear_until = now + EAR_TWITCH_SECONDS
+
         step = int((now - tail_start) / FRAME_SECONDS)
         frame = tail_frames[step] if step < len(tail_frames) else 0
         state = (frame, mouth_from <= now < mouth_until, held_inputs(pad),
-                 pad.name if pad.connected else "")
+                 pad.name if pad.connected else "",
+                 ear_side if now < ear_until else "")
         if state != shown:          # only redraw when something changes
             screen.draw(*state)
             shown = state

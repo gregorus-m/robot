@@ -175,6 +175,7 @@ def main() -> None:
 
     sys.stdout.write(HIDE_CURSOR)
     screen.draw(0, clear=True)
+    sound.start()        # open the audio stream early so the TV wakes up
 
     # Placeholder main loop: swish the tail (and meow) now and then.
     # Replace/extend with the robot's real control loop later.

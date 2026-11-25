@@ -44,7 +44,17 @@ import sound
 from pathlib import Path
 assert (sound.SOUNDS_DIR / 'meow.wav').is_file(), 'sounds/meow.wav missing'
 sound.play('meow.wav'); sound.play('does-not-exist.wav')
-print('  players found:', {k: __import__('shutil').which(v[0]) for k, v in sound.PLAYERS.items()})
+import array, io, wave
+data = sound._load('meow.wav'); assert data and len(data) % 4 == 0
+print(f'  meow.wav -> {len(data)/(sound.RATE*4):.2f}s at 48k stereo; aplay found: {bool(__import__(\"shutil\").which(\"aplay\"))}')
+# conversions: 8-bit mono 22050 Hz and 16-bit stereo 44100 Hz
+for ch, w, r in [(1, 1, 22050), (2, 2, 44100)]:
+    buf = io.BytesIO(); f = wave.open(buf, 'wb'); f.setnchannels(ch); f.setsampwidth(w); f.setframerate(r)
+    f.writeframes(bytes(ch * w * r // 10)); f.close()
+    open('/tmp/robotos-test.wav', 'wb').write(buf.getvalue())
+    out = sound._decode(__import__('pathlib').Path('/tmp/robotos-test.wav'))
+    assert abs(len(out) / (sound.RATE * 4) - 0.1) < 0.01, (ch, w, r, len(out))
+print('  format conversions ok')
 "
 
 echo "Self-update is skipped in this dev copy:"

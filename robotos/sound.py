@@ -25,7 +25,7 @@ DEVICE: str | None = None
 
 # Silence added before each .wav sound. Many TVs mute the first fraction of
 # a second of HDMI audio every time a sound starts. 0 to turn off.
-LEAD_IN_SECONDS = 0.5
+LEAD_IN_SECONDS = 2.0
 
 PLAYERS = {
     ".wav": ("aplay", "-q", "-D"),

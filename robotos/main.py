@@ -48,6 +48,18 @@ MEOW_EVERY = (6.0, 20.0)         # random pause between meows (seconds), indepen
 
 CLEAR_SCREEN = "\033[2J"
 CURSOR_HOME = "\033[H"
+INVERSE = "\033[7m"
+NORMAL = "\033[0m"
+
+# D-pad diagram shown under the text. Each arrow token lights up (inverse
+# colours) while that direction is pressed. Redraw it however you like, as
+# long as the four tokens stay exactly as written.
+DPAD_ART = [
+    "    [^]    ",
+    " [<]   [>] ",
+    "    [v]    ",
+]
+DPAD_TOKENS = {"up": "[^]", "down": "[v]", "left": "[<]", "right": "[>]"}
 HIDE_CURSOR = "\033[?25l"
 SHOW_CURSOR = "\033[?25h"
 
@@ -138,7 +150,10 @@ class Screen:
         self.pic_width = max(len(line) for f in frames for line in f)
 
     def draw(self, frame_index: int, mouth_open: bool = False,
+             dpad: frozenset[str] = frozenset(), pad_name: str = "",
              clear: bool = False) -> None:
+        """dpad: the directions held ("up", "down", ...). pad_name: the
+        connected controller's name, or "" if none."""
         cols, rows = shutil.get_terminal_size(fallback=(80, 24))
 
         frame = self.frames[frame_index]
@@ -150,11 +165,26 @@ class Screen:
             lines.append("")
             lines += [line.strip().center(cols).rstrip() for line in self.text]
 
+        lines.append("")
+        dpad_from = len(lines)
+        dpad_width = max(len(line) for line in DPAD_ART)
+        dpad_left = max((cols - dpad_width) // 2, 0)
+        lines += [" " * dpad_left + line for line in DPAD_ART]
+        dpad_to = len(lines)
+        lines.append((pad_name or "no controller").center(cols).rstrip())
+
         top = max((rows - len(lines)) // 2, 0)
         # Pad each line to the screen width so it fully overwrites the
         # previous frame (no flicker from clearing the whole screen).
         lines = [""] * top + lines
-        body = "\n".join(line[:cols].ljust(cols) for line in lines[:rows])
+        lines = [line[:cols].ljust(cols) for line in lines[:rows]]
+        # Light up pressed arrows. Done after padding, because the colour
+        # codes take up no space on screen but would confuse the padding.
+        for i in range(top + dpad_from, min(top + dpad_to, len(lines))):
+            for direction in dpad:
+                token = DPAD_TOKENS[direction]
+                lines[i] = lines[i].replace(token, INVERSE + token + NORMAL)
+        body = "\n".join(lines)
 
         sys.stdout.write((CLEAR_SCREEN if clear else "") + CURSOR_HOME + body)
         sys.stdout.flush()
@@ -191,7 +221,7 @@ def main() -> None:
     tail_frames: list[int] = []     # swish frames still to show
     tail_start = 0.0
     mouth_from = mouth_until = 0.0  # when the mouth is open
-    shown = (0, False)
+    shown = None
 
     while True:
         now = time.monotonic()
@@ -210,7 +240,12 @@ def main() -> None:
 
         step = int((now - tail_start) / FRAME_SECONDS)
         frame = tail_frames[step] if step < len(tail_frames) else 0
-        state = (frame, mouth_from <= now < mouth_until)
+        dx, dy = pad.axis(controller.DPAD_X), pad.axis(controller.DPAD_Y)
+        dpad = frozenset(name for name, held in (
+            ("up", dy < -0.5), ("down", dy > 0.5),
+            ("left", dx < -0.5), ("right", dx > 0.5)) if held)
+        state = (frame, mouth_from <= now < mouth_until, dpad,
+                 pad.name if pad.connected else "")
         if state != shown:          # only redraw when something changes
             screen.draw(*state)
             shown = state

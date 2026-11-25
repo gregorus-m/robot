@@ -18,6 +18,11 @@ from pathlib import Path
 REPO_DIR = Path(__file__).resolve().parent.parent
 MAIN = REPO_DIR / "robotos" / "main.py"
 
+# Self-update discards local changes, so only do it in the Pi's install
+# location -- never in a development checkout. Set ROBOTOS_SELF_UPDATE=1 to
+# force it elsewhere.
+INSTALL_DIR = Path("/opt/robotos")
+
 NETWORK_WAIT_SECONDS = 20   # how long to wait for wifi at boot
 GIT_TIMEOUT_SECONDS = 30    # max time for any single git command
 
@@ -52,6 +57,8 @@ def wait_for_network(timeout: float) -> bool:
 def try_update() -> str:
     """Returns a short human-readable status; never raises."""
     try:
+        if REPO_DIR != INSTALL_DIR and os.environ.get("ROBOTOS_SELF_UPDATE") != "1":
+            return f"skipped (dev copy, not {INSTALL_DIR})"
         if not (REPO_DIR / ".git").exists():
             return "skipped (not a git checkout)"
         if not wait_for_network(NETWORK_WAIT_SECONDS):

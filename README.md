@@ -13,7 +13,7 @@ On boot, systemd runs `robotos/boot.py`, which:
 
 | Path | What it is |
 |---|---|
-| `splash.txt` | The splash screen. Edit freely. `{version}` and `{update}` are filled in at runtime. |
+| `splash.txt` | The splash screen: an animated cat. Frames are separated by `--- frame ---` (the first is the resting pose); text under the picture goes after `=== text ===`. `{version}` and `{update}` are filled in at runtime. |
 | `robotos/boot.py` | Startup script: self-update, then launch main. |
 | `robotos/main.py` | RobotOS itself (splash + main loop placeholder). |
 | `systemd/robotos.service` | systemd unit that starts RobotOS at boot on tty1. |
@@ -47,5 +47,5 @@ sudo systemctl disable robotos    # stop it starting at boot
 ## Test locally
 
 ```bash
-python3 robotos/boot.py    # Ctrl+C to exit
+python3 robotos/boot.py    # Ctrl+C to exit (self-update is skipped outside /opt/robotos)
 ```

@@ -51,15 +51,22 @@ CURSOR_HOME = "\033[H"
 INVERSE = "\033[7m"
 NORMAL = "\033[0m"
 
-# D-pad diagram shown under the text. Each arrow token lights up (inverse
-# colours) while that direction is pressed. Redraw it however you like, as
-# long as the four tokens stay exactly as written.
-DPAD_ART = [
-    "    [^]    ",
-    " [<]   [>] ",
-    "    [v]    ",
+# Controller diagram shown under the text. Each token lights up (inverse
+# colours) while that button is held. Redraw it however you like, as long as
+# the tokens in PAD_TOKENS stay exactly as written.
+PAD_ART = [
+    "[LT] [LB]                       [RB] [RT]",
+    "    [^]     [Back][Logi][Start]    [Y]   ",
+    " [<]   [>]                      [X]   [B]",
+    "    [v]        [L3]   [R3]         [A]   ",
 ]
-DPAD_TOKENS = {"up": "[^]", "down": "[v]", "left": "[<]", "right": "[>]"}
+PAD_TOKENS = {
+    "up": "[^]", "down": "[v]", "left": "[<]", "right": "[>]",
+    controller.A: "[A]", controller.B: "[B]", controller.X: "[X]", controller.Y: "[Y]",
+    controller.LB: "[LB]", controller.RB: "[RB]", "LT": "[LT]", "RT": "[RT]",
+    controller.BACK: "[Back]", controller.LOGITECH: "[Logi]", controller.START: "[Start]",
+    controller.LEFT_STICK_PRESS: "[L3]", controller.RIGHT_STICK_PRESS: "[R3]",
+}
 HIDE_CURSOR = "\033[?25l"
 SHOW_CURSOR = "\033[?25h"
 
@@ -150,10 +157,10 @@ class Screen:
         self.pic_width = max(len(line) for f in frames for line in f)
 
     def draw(self, frame_index: int, mouth_open: bool = False,
-             dpad: frozenset[str] = frozenset(), pad_name: str = "",
+             held: frozenset = frozenset(), pad_name: str = "",
              clear: bool = False) -> None:
-        """dpad: the directions held ("up", "down", ...). pad_name: the
-        connected controller's name, or "" if none."""
+        """held: the PAD_TOKENS keys currently held. pad_name: the connected
+        controller's name, or "" if none."""
         cols, rows = shutil.get_terminal_size(fallback=(80, 24))
 
         frame = self.frames[frame_index]
@@ -166,11 +173,11 @@ class Screen:
             lines += [line.strip().center(cols).rstrip() for line in self.text]
 
         lines.append("")
-        dpad_from = len(lines)
-        dpad_width = max(len(line) for line in DPAD_ART)
-        dpad_left = max((cols - dpad_width) // 2, 0)
-        lines += [" " * dpad_left + line for line in DPAD_ART]
-        dpad_to = len(lines)
+        pad_from = len(lines)
+        pad_width = max(len(line) for line in PAD_ART)
+        pad_left = max((cols - pad_width) // 2, 0)
+        lines += [" " * pad_left + line for line in PAD_ART]
+        pad_to = len(lines)
         lines.append((pad_name or "no controller").center(cols).rstrip())
 
         top = max((rows - len(lines)) // 2, 0)
@@ -178,16 +185,28 @@ class Screen:
         # previous frame (no flicker from clearing the whole screen).
         lines = [""] * top + lines
         lines = [line[:cols].ljust(cols) for line in lines[:rows]]
-        # Light up pressed arrows. Done after padding, because the colour
-        # codes take up no space on screen but would confuse the padding.
-        for i in range(top + dpad_from, min(top + dpad_to, len(lines))):
-            for direction in dpad:
-                token = DPAD_TOKENS[direction]
-                lines[i] = lines[i].replace(token, INVERSE + token + NORMAL)
+        # Light up held buttons. Done after padding, because the colour codes
+        # take up no space on screen but would confuse the padding.
+        for i in range(top + pad_from, min(top + pad_to, len(lines))):
+            for key in held:
+                token = PAD_TOKENS.get(key)
+                if token:
+                    lines[i] = lines[i].replace(token, INVERSE + token + NORMAL)
         body = "\n".join(lines)
 
         sys.stdout.write((CLEAR_SCREEN if clear else "") + CURSOR_HOME + body)
         sys.stdout.flush()
+
+
+def held_inputs(pad: controller.Controller) -> frozenset:
+    """Everything held on the controller, as PAD_TOKENS keys."""
+    dx, dy = pad.axis(controller.DPAD_X), pad.axis(controller.DPAD_Y)
+    extra = {name for name, on in (
+        ("up", dy < -0.5), ("down", dy > 0.5), ("left", dx < -0.5), ("right", dx > 0.5),
+        # triggers rest at -1 and reach +1 fully pressed: lit past halfway
+        ("LT", pad.axis(controller.LEFT_TRIGGER) > 0),
+        ("RT", pad.axis(controller.RIGHT_TRIGGER) > 0)) if on}
+    return frozenset(pad.buttons_held() | extra)
 
 
 def shutdown(*_: object) -> None:
@@ -240,11 +259,7 @@ def main() -> None:
 
         step = int((now - tail_start) / FRAME_SECONDS)
         frame = tail_frames[step] if step < len(tail_frames) else 0
-        dx, dy = pad.axis(controller.DPAD_X), pad.axis(controller.DPAD_Y)
-        dpad = frozenset(name for name, held in (
-            ("up", dy < -0.5), ("down", dy > 0.5),
-            ("left", dx < -0.5), ("right", dx > 0.5)) if held)
-        state = (frame, mouth_from <= now < mouth_until, dpad,
+        state = (frame, mouth_from <= now < mouth_until, held_inputs(pad),
                  pad.name if pad.connected else "")
         if state != shown:          # only redraw when something changes
             screen.draw(*state)

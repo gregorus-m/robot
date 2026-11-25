@@ -59,6 +59,11 @@ class Controller:
             self._presses.clear()
         return presses
 
+    def buttons_held(self) -> set[int]:
+        """Buttons currently held down."""
+        with self._lock:
+            return set(self.held)
+
     def axis(self, number: int) -> float:
         """Axis position from -1.0 to 1.0 (0 if not connected)."""
         return self.axes.get(number, 0) / 32767
@@ -89,20 +94,21 @@ class Controller:
                     if kind == _AXIS:
                         self.axes[number] = value
                     elif kind == _BUTTON:
-                        if value:
-                            self.held.add(number)
-                            if not initial:
-                                with self._lock:
+                        with self._lock:
+                            if value:
+                                self.held.add(number)
+                                if not initial:
                                     self._presses.append(number)
-                        else:
-                            self.held.discard(number)
+                            else:
+                                self.held.discard(number)
         except OSError as exc:
             if self.connected:
                 log(f"disconnected ({exc.strerror or exc})")
         finally:
             self.connected = False
             self.axes.clear()
-            self.held.clear()
+            with self._lock:
+                self.held.clear()
 
 
 def _device_name(path: str) -> str:

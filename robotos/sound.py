@@ -9,10 +9,12 @@ Players used (standard Linux command-line tools):
   .mp3  -> mpg123   (package: mpg123)
 """
 
+import io
 import shutil
 import subprocess
 import sys
 import threading
+import wave
 from pathlib import Path
 
 SOUNDS_DIR = Path(__file__).resolve().parent.parent / "sounds"
@@ -20,6 +22,10 @@ SOUNDS_DIR = Path(__file__).resolve().parent.parent / "sounds"
 # Which ALSA device to play on. None = the system default (set it in
 # /etc/asound.conf). Or force one here, e.g. "plughw:1" for HDMI port 2.
 DEVICE: str | None = None
+
+# Silence added before each .wav sound. Many TVs mute the first fraction of
+# a second of HDMI audio every time a sound starts. 0 to turn off.
+LEAD_IN_SECONDS = 0.5
 
 PLAYERS = {
     ".wav": ("aplay", "-q", "-D"),
@@ -49,6 +55,41 @@ def command_for(path: Path) -> list[str] | None:
     return cmd + [str(path)]
 
 
+def with_lead_in(path: Path) -> bytes | None:
+    """The .wav file's bytes with LEAD_IN_SECONDS of silence in front."""
+    try:
+        with wave.open(str(path), "rb") as src:
+            params = src.getparams()
+            audio = src.readframes(params.nframes)
+        bytes_per_frame = params.nchannels * params.sampwidth
+        # 8-bit WAV is unsigned, so its "silence" is 128 rather than 0.
+        quiet = b"\x80" if params.sampwidth == 1 else b"\x00"
+        silence = quiet * (int(params.framerate * LEAD_IN_SECONDS) * bytes_per_frame)
+        out = io.BytesIO()
+        with wave.open(out, "wb") as dst:
+            dst.setparams(params)
+            dst.writeframes(silence + audio)
+        return out.getvalue()
+    except Exception as exc:  # noqa: BLE001
+        log(f"couldn't add lead-in to {path.name}, playing as-is: {exc}")
+        return None
+
+
+def timing(name: str) -> tuple[float, float]:
+    """(seconds until sounds/<name> is actually heard, how long it lasts).
+
+    Only known for .wav files; returns (0, 0) otherwise.
+    """
+    path = SOUNDS_DIR / name
+    if path.suffix.lower() != ".wav":
+        return 0.0, 0.0
+    try:
+        with wave.open(str(path), "rb") as f:
+            return LEAD_IN_SECONDS, f.getnframes() / f.getframerate()
+    except Exception:  # noqa: BLE001
+        return 0.0, 0.0
+
+
 def play(name: str) -> bool:
     """Start playing sounds/<name> in the background.
 
@@ -64,12 +105,18 @@ def play(name: str) -> bool:
 
     def run() -> None:
         try:
-            result = subprocess.run(cmd, stdin=subprocess.DEVNULL,
+            data = None
+            if path.suffix.lower() == ".wav" and LEAD_IN_SECONDS > 0:
+                data = with_lead_in(path)
+            if data is not None:
+                cmd[-1] = "-"   # aplay reads the padded sound from stdin
+            result = subprocess.run(cmd, input=data,
+                                    stdin=None if data is not None else subprocess.DEVNULL,
                                     stdout=subprocess.DEVNULL,
-                                    stderr=subprocess.PIPE, text=True,
-                                    timeout=120)
+                                    stderr=subprocess.PIPE, timeout=120)
             if result.returncode != 0:
-                log(f"{name} failed: {result.stderr.strip()[:200]}")
+                err = result.stderr.decode(errors="replace").strip()
+                log(f"{name} failed: {err[:200]}")
             else:
                 log(f"played {name} ({' '.join(cmd[:-1])})")
         except Exception as exc:  # noqa: BLE001

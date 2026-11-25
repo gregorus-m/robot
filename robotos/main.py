@@ -28,6 +28,10 @@ import sound
 REPO_DIR = Path(__file__).resolve().parent.parent
 SPLASH_FILE = REPO_DIR / "splash.txt"
 SWISH_SOUND = "meow.wav"         # played when the tail swishes; any .wav or .mp3 in sounds/
+# While the meow is playing, this part of the picture is swapped for the
+# open-mouth version. If you redraw the cat's face, update these to match.
+MOUTH_CLOSED = "> ^ <"
+MOUTH_OPEN = "> o <"
 
 # Big font for the HDMI console (the default is tiny on a TV). Other sizes
 # live in /usr/share/consolefonts, e.g. Lat15-TerminusBold28x14.psf.gz.
@@ -131,12 +135,15 @@ class Screen:
         # Use the widest frame for all frames so the cat doesn't jump around.
         self.pic_width = max(len(line) for f in frames for line in f)
 
-    def draw(self, frame_index: int, clear: bool = False) -> None:
+    def draw(self, frame_index: int, mouth_open: bool = False,
+             clear: bool = False) -> None:
         cols, rows = shutil.get_terminal_size(fallback=(80, 24))
 
+        frame = self.frames[frame_index]
+        if mouth_open:
+            frame = [line.replace(MOUTH_CLOSED, MOUTH_OPEN) for line in frame]
         pic_left = max((cols - self.pic_width) // 2, 0)
-        lines = [" " * pic_left + line.ljust(self.pic_width)
-                 for line in self.frames[frame_index]]
+        lines = [" " * pic_left + line.ljust(self.pic_width) for line in frame]
         if self.text:
             lines.append("")
             lines += [line.strip().center(cols).rstrip() for line in self.text]
@@ -173,12 +180,34 @@ def main() -> None:
     # Replace/extend with the robot's real control loop later.
     while True:
         time.sleep(random.uniform(*SWISH_EVERY))
-        sound.play(SWISH_SOUND)
-        # Sometimes swish twice in a row.
-        for _ in range(random.choice([1, 1, 2])):
-            for index in sequence:
-                screen.draw(index)
-                time.sleep(FRAME_SECONDS)
+        swish_and_meow(screen, sequence)
+
+
+def swish_and_meow(screen: Screen, sequence: list[int]) -> None:
+    """Swish the tail (sometimes twice), with the mouth open while the meow
+    is actually audible."""
+    start = time.monotonic()
+    mouth_from = mouth_until = start
+    if sound.play(SWISH_SOUND):
+        delay, length = sound.timing(SWISH_SOUND)
+        mouth_from = start + delay
+        mouth_until = mouth_from + length
+
+    tail_frames = sequence * random.choice([1, 1, 2])
+    shown = None
+    while True:
+        now = time.monotonic()
+        step = int((now - start) / FRAME_SECONDS)
+        if step >= len(tail_frames) and now >= mouth_until:
+            break
+        frame = tail_frames[step] if step < len(tail_frames) else 0
+        state = (frame, mouth_from <= now < mouth_until)
+        if state != shown:          # only redraw when something changes
+            screen.draw(*state)
+            shown = state
+        time.sleep(0.02)
+    if shown != (0, False):
+        screen.draw(0)
 
 
 if __name__ == "__main__":

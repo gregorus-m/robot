@@ -57,6 +57,26 @@ for ch, w, r in [(1, 1, 22050), (2, 2, 44100)]:
 print('  format conversions ok')
 "
 
+echo "Controller reads button presses (simulated device):"
+check python3 -c "
+import sys, struct, time, tempfile; sys.path.insert(0, 'robotos')
+import controller
+ev = struct.Struct('IhBB')
+f = tempfile.NamedTemporaryFile(delete=False)
+f.write(ev.pack(0, 0, 0x81, 0))          # initial state: A up (not a press)
+f.write(ev.pack(0, -32767, 0x82, 2))     # initial state: left trigger at rest
+f.write(ev.pack(1, 1, 0x01, 0)); f.write(ev.pack(2, 0, 0x01, 0))   # press+release A
+f.write(ev.pack(3, 1, 0x01, 1))          # press B
+f.write(ev.pack(4, 16000, 0x02, 0))      # left stick half right
+f.close()
+controller.glob.glob = lambda pattern: [f.name]
+controller.RESCAN_SECONDS = 60
+pad = controller.Controller(); time.sleep(0.3)
+got = pad.events()
+assert got == [controller.A, controller.B], got
+print('  presses:', [controller.BUTTON_NAMES[b] for b in got])
+"
+
 echo "Self-update is skipped in this dev copy:"
 check bash -c 'python3 -c "
 import sys; sys.path.insert(0, \"robotos\")

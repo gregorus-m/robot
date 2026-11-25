@@ -23,6 +23,7 @@ import sys
 import time
 from pathlib import Path
 
+import controller
 import sound
 
 REPO_DIR = Path(__file__).resolve().parent.parent
@@ -178,9 +179,12 @@ def main() -> None:
     screen.draw(0, clear=True)
     sound.start()        # open the audio stream early so the TV wakes up
 
+    pad = controller.Controller()   # finds the game controller whenever it's plugged in
+
     # Placeholder main loop: the tail swishes and the cat meows, each on its
-    # own random schedule (they can overlap). Replace/extend with the robot's
-    # real control loop later.
+    # own random schedule (they can overlap), or on demand from the
+    # controller: A = meow, B = swish. Replace/extend with the robot's real
+    # control loop later.
     now = time.monotonic()
     next_swish = now + random.uniform(*SWISH_EVERY)
     next_meow = now + random.uniform(*MEOW_EVERY)
@@ -191,13 +195,14 @@ def main() -> None:
 
     while True:
         now = time.monotonic()
+        pressed = pad.events()
 
-        if now >= next_swish:
+        if now >= next_swish or controller.B in pressed:
             tail_frames = sequence * random.choice([1, 1, 2])   # sometimes twice
             tail_start = now
             next_swish = now + len(tail_frames) * FRAME_SECONDS + random.uniform(*SWISH_EVERY)
 
-        if now >= next_meow:
+        if now >= next_meow or controller.A in pressed:
             if sound.play(MEOW_SOUND):
                 delay, length = sound.timing(MEOW_SOUND)
                 mouth_from, mouth_until = now + delay, now + delay + length

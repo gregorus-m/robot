@@ -29,7 +29,7 @@ DEVICE: str | None = None
 # second to switch their speakers on when HDMI audio starts, and pure digital
 # silence doesn't wake them -- so without this, short sounds are lost
 # entirely. 0 to turn off (e.g. once using the built-in speaker amp).
-LEAD_IN_SECONDS = 1.5
+LEAD_IN_SECONDS = 3.0
 LEAD_IN_LEVEL = 30      # hiss amplitude out of 32767 (about -60 dB: inaudible)
 
 PLAYERS = {
